@@ -1,5 +1,12 @@
 var watchId = null;
 
+// gelocation api options
+var GLoptions = {
+     enableHighAccuracy: false,
+     timeout: 10000,
+     maximumAge: 60000
+};
+
 // coordinates of Greenwich, England
 baseCoords = {latitude:51.477222,longitude:0}; 
 
@@ -10,15 +17,8 @@ var Path = null;
 window.onload = getMyLocation;
 
 function getMyLocation() {
-
     if (navigator.geolocation) {
-       var options = {
-          enableHighAccuracy: false,
-          timeout: 5000,
-          maximumAge: 30000
-       };
-
-       navigator.geolocation.getCurrentPosition(displayLocation,displayError,options);
+       navigator.geolocation.getCurrentPosition(displayLocation,displayError,GLoptions);
 
        // initialize toggle button
        var watchButton = document.getElementById("watch");
@@ -31,21 +31,23 @@ function getMyLocation() {
 
 function displayLocation(position) {
    var div = document.getElementById("location");
-   div.innerHTML = "Located at Latitude: " + position.coords.latitude + ", Longitude: " + position.coords.longitude;
+   var coords = position.coords;
+   div.innerHTML = "Latitude: " + coords.latitude + ", Longitude: " + coords.longitude;
 
-   var km = computeDistance(position.coords, baseCoords);
+   var km;
    var distance = document.getElementById("distance");
-   distance.innerHTML = "Position is " + km.toFixed(2) + " km from Greenwich, England";
-
    if (map == null) {
-      showMap(position.coords);
-      prevCoords = position.coords;
+      km = computeDistance(coords, baseCoords);
+      distance.innerHTML = "Position is " + km.toFixed(2) + " km from Greenwich, England";
+      showMap(coords);
+      prevCoords = coords;
    } else {
-      km = computeDistance(position.coords, prevCoords);
-      if (km > 0.3) { // 300m - roughly 10 blocks
-         scrollMapToPosition(position.coords);
-         prevCoords = position.coords;
-      }
+        km = computeDistance(coords, prevCoords);
+        if (km > 0.3) {
+           distance.innerHTML = "Position is " + km.toFixed(2) + " km from previous position";
+           scrollMapToPosition(coords);
+           prevCoords = coords;
+        }
    }
 }
 
@@ -68,7 +70,8 @@ function displayError(error) {
 }
 
 function watchLocation() {
-   watchId = navigator.geolocation.watchPosition(displayLocation,displayError);
+   GLoptions["enableHighAccuracy"] = true;
+   watchId = navigator.geolocation.watchPosition(displayLocation,displayError,GLoptions);
 
    // change label and function of toggle button
    var watchButton = document.getElementById("watch");
@@ -81,6 +84,7 @@ function clearWatch() {
       navigator.geolocation.clearWatch(watchId);
       watchId = null;
 
+      GLoptions["enableHighAccuracy"] = false;
       // reset label and function of toggle button
       var watchButton = document.getElementById("watch");
       watchButton.value = "Follow";
@@ -113,9 +117,10 @@ function showMap(coords) {
                             strokeOpacity: 1.0,
                             strokeWeight: 2
                          });
-    Path.setMap(map);
-    var pathCoords = Path.getPath();
+    var pathCoords = Path.getPath(); // pathCoords is a google.maps MVCArray
     pathCoords.push(latlong);
+    Path.setPath(pathCoords); // path does not display unless setPath is called
+    Path.setMap(map);
 }
 
 function addMarker(map, latlong, title, content) {
@@ -141,10 +146,14 @@ function addMarker(map, latlong, title, content) {
 function scrollMapToPosition(coords) {
    var latlong = new google.maps.LatLng(coords.latitude, coords.longitude);
    map.panTo(latlong);
-   addMarker(map, latlong, "New Location: " + coords.latitude + ", " + coords.longitude);
+   // put a marker on the map
+   var title = "New Location";
+   var content = "Position: " + coords.latitude + ", " + coords.longitude;
+   content += " (Accuracy: " + coords.accuracy.toFixed(2) + " meters)";
+   addMarker(map, latlong, title, content);
+   // update path
    var pathCoords = Path.getPath();
    pathCoords.push(latlong);
-   Path.setPath(pathCoords); // path does not display unless setPath is called
 }
 
 function computeDistance(startCoords, destCoords) {
@@ -163,6 +172,7 @@ function computeDistance(startCoords, destCoords) {
    return distance;
 }
 
-function degreesToRadians(degrees) {
-   return (degrees * Math.PI)/180;
-}
+
+function degreesToRadians (degrees) {
+         return (degrees * Math.PI)/180;
+};
